@@ -49,7 +49,9 @@ class LLmClient:
             await self._client.close()
             self._client = None
 
-    async def chat_completion(self, messages: list[dict[str:Any]], stream: bool = True):
+    async def chat_completion(
+        self, messages: list[dict[str:Any]], stream: bool = True
+    ) -> AsyncGenerator[StreamEvent, None]:
         r"""
         What are these messages and stream:So the thing about the LLMs is that they are stateless they don't contain any state if we have the bunch of messages 
         for example let's say i am talking to chat gpt and send the message Hii which is 1 message form my side in response chatgpt sended hey, whats'up?  
@@ -66,4 +68,71 @@ class LLmClient:
         so here what i mean by stateless. it doesn't really contain any state.we have to keep sending it all of this data and that's 
         why we have messages which is a 'list[dict]' -> in this why  it is sotored on this method is because
         """
-        pass
+        client = self.get_client()
+
+        kwargs = {
+            "model": "mistralai/devstral-2512:free",
+            "messages": messages,
+            "stream": stream,
+        }
+
+        if stream:
+            async for event in self._stream_response(client, kwargs):
+                yield event
+        else:
+            event = await self._non_stream_response(client, kwargs)
+            yield event
+
+        r"""   
+        what is yeild:The yield keyword in Python is used in generator functions to produce a sequence of values one at a time, rather than computing and returning all values at once. 
+        It is generally used to convert a regular Python function into a generator. A generator is a special function in Python that returns a generator object to the caller. Since it stores the local variable states, hence overhead of memory allocation is controlled
+        Python Return It is generally used for the end of the execution and “returns” the result to the caller statement. It can return all type of values and it returns None when there is no expression with the statement "return"
+        How yield Works
+        Pauses Execution: When a yield statement is encountered, the function's execution is temporarily suspended, and the yielded value is returned to the caller.
+        Saves State: Unlike a return statement, which terminates the function completely, yield saves the function's local state (including local variables and the instruction pointer).
+        Resumes Execution: When the next value is requested (e.g., in a for loop or by calling the next() function), the function resumes execution from exactly where it was paused, continuing until the next yield or the function ends.
+        Returns a Generator: Any function containing yield automatically becomes a generator function and returns a generator object when called, rather than executing the code immediately. 
+        Difference between return and yield :The core difference is that return terminates a function entirely, while yield pauses a function (saving its state) and turns it into a generator which can be resumed later to produce a sequence of values. 
+        
+        
+        
+        """
+
+        return
+
+    async def _stream_response(
+        self, client: AsyncOpenAI, kwargs: dict[str, Any]
+    ) -> AsyncGenerator[StreamEvent, None]:
+        response = await client.chat.completions.create(**kwargs)
+
+        async for chunk in response:
+            # print(chunk)
+            yield chunk
+
+    async def _non_stream_response(
+        self, client: AsyncOpenAI, kwargs: dict[str, Any]
+    ) -> StreamEvent:
+        response = await client.chat.completions.create(**kwargs)
+        # print(response)
+
+        choice = response.choices[0]
+        message = choice.message
+        text_delta = None
+        if message.content:
+            text_delta = TextDelta(content=message.content)
+
+        if response.usage:
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                total_tokens=response.usage.total_tokens,
+                cached_tokens=response.usage.prompt_tokens_details.cached_tokens,
+            )
+
+        return StreamEvent(
+            type=EventType.MESSAGE_COMPLETE,
+            text_delta=text_delta,
+            finish_reason=choice.finish_reason,
+            usage=usage,
+        )
+
