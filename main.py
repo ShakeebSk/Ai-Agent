@@ -5,17 +5,21 @@ from client.llm_client import LLMClient
 import asyncio
 import click
 
+from ui.tui import TUI, get_console
+
 r""" 
 
 """
 
+console = get_console()
+
 
 class CLI:
     def __init__(self):
-        self.agent = Agent() | None = None
-        
+        self.agent: Agent | None = None
+        self.tui = TUI(console)
 
-    async def run_single(self,message: str):
+    async def run_single(self, message: str):
         async with Agent() as agent:
             self.agent = agent
             self._process_message(message)
@@ -23,27 +27,30 @@ class CLI:
     async def _process_message(self, message: str) -> str | None:
         if self.agent:
             return None
-        
+
         async for event in self.agent.run(message):
             if event.type == AgentEventType.TEXT_DELTA:
                 content = event.data.get("content", "")
-                print(content, end="", flush=True)
-                
+                self.tui.stream_assistant_delta(content)
+                # print(content, end="", flush=True)
+
 
 # async def run(messages: dict[str, Any]):
-    # client = LLMClient()
-    # async for event in client.chat_completion(messages, True):
-    #     print(event)
-    # pass
+# client = LLMClient()
+# async for event in client.chat_completion(messages, True):
+#     print(event)
+# pass
 
 
 @click.command()
 @click.argument("prompt", required=False)
-def main(prompt: str | None,):
+def main(
+    prompt: str | None,
+):
     # print(prompt)
     # client = LLMClient()
     cli = CLI()
-    
+
     # messages = [{"role": "user", "content": prompt}]
     # async for event in client.chat_completion(messages, True):
     #     print(event)
